@@ -61,3 +61,15 @@ Este proyecto fue desarrollado como parte de una práctica de análisis de audio
 
 
 
+### 📦 Descarga automática del dataset
+
+Este proyecto usa el dataset `Feanix/gtzan-10-sec` desde Hugging Face.
+
+No es necesario subirlo al repositorio. Para descargarlo automáticamente:
+
+```python
+from datasets import load_dataset
+dataset = load_dataset("Feanix/gtzan-10-sec", cache_dir="./audio")
+
+
+
