@@ -10,189 +10,110 @@ import json
 # Convertir a input los audios
 from pydub import AudioSegment
 
-def transform_mp3_to_wav(file_path_import, name_file, file_path_export):
-    """
-    Input:
-        - file_path_import: recibe la ruta donde se encuentra el audio -> ejemplo: /home/jazmin/Escritorio/Database II/Recomendador_musica/fma_small/000 
-        - name_file : es el nombre del archivo sin ninguna extension
-        -- file_path_export: recibe la ruta donde se va a guardar el audio en .wav -> ejemplo: /home/jazmin/Escritorio/Database II/Recomendador_musica/fma_small_output/000 
-    """
+# calculos matematicos
+import math
+import heapq
 
-     # Construir rutas completas
-    input_path = os.path.join(file_path_import, f"{name_file}.mpeg")
-    output_path = os.path.join(file_path_export, f"{name_file}.wav")
+def transform_mp3_to_wav(file_path_import, file_path_export,tiempo_recorte=30):
+    """
+    Convierte los primeros 30 segundos de un archivo MP3 a WAV mono 22050 Hz.
     
+    Parámetros:
+      file_path_import: Ruta completa del archivo MP3.
+      file_path_export: Ruta completa del archivo WAV. (para guardar)
+      tiempo_recorte  : Tiempo de recorte en (Segundos)
+    
+    """
+    
+    # Construir la ruta de salida
+    input_path = file_path_import
+    output_path = file_path_export
+
     # Cargar archivo MP3
     audio = AudioSegment.from_file(input_path, format="mp3")
+
+    # Cortar los primeros 30 segundos (30 * 1000 milisegundos)
+    audio = audio[:tiempo_recorte*1000]  
 
     # Convertir a WAV (mono, 22050 Hz)
     audio = audio.set_frame_rate(22050).set_channels(1)
     audio.export(output_path, format="wav")
-    print(f"Convertido: de lna ruta {input_path} →  to : {output_path}")
 
-def recortar_si_posible(input_path, output_path, inicio_s=60, duracion_s=10):
-    audio = AudioSegment.from_wav(input_path)
-    total_duracion = len(audio) / 1000  # en segundos
+    print(f"Convertido: {input_path} → {output_path}")
 
-    # Si no alcanza para cortar desde 60s, recorta desde el inicio
-    if total_duracion >= inicio_s + duracion_s:
-        segmento = audio[inicio_s * 1000 : (inicio_s + duracion_s) * 1000]
-    elif total_duracion >= duracion_s:
-        segmento = audio[:duracion_s * 1000]
-    else:
-        segmento = audio  # recorta lo que haya (menos de 30s)
-    
-    segmento.export(output_path, format="wav")
-    print(f"✅ Recortado: {output_path} ({len(segmento)/1000:.1f}s)")
 
-def all_audio_transform_mp3_to_wav(dir_input, dir_output):
-    """
-    Recorre todos los .mp3 en el directorio_entrada y los convierte a .wav
-    usando la función transform_mp3_to_wav.
-    """
-    os.makedirs(dir_output, exist_ok=True)
-    nombres_convertidos = []
 
-    for archivo in os.listdir(dir_input):
-        if archivo.lower().endswith(".mp3"):
-            nombre_sin_ext = os.path.splitext(archivo)[0]
-            transform_mp3_to_wav(dir_input, nombre_sin_ext, dir_output)
-            nombres_convertidos.append(nombre_sin_ext)
-    
-    return nombres_convertidos  # Por si luego quieres usar los .wav resultantes
-    
 
 
 # Obtener el mfcc
-
-
-def extract_mfcc(file_path_wave, n_mfcc=13):
+def extract_mfcc(file_path_wav, n_mfcc=13,ventana=0.5,duracion=30,out=False):
     """
     Extrae las características MFCC de un archivo de audio.
 
     Parámetros:
-        file_path_wave (str): Ruta al archivo .wav
-        n_mfcc (int): Número de coeficientes MFCC a extraer por frame
+        file_path_wave: Ruta al archivo .wav
+        n_mfcc        : Número de coeficientes MFCC a extraer por frame 
+        ventana       : tomar de captura del frame en el tiempo en una ventana s(Segundos) 
+        duracion      : cuanto tiempo del audio se procesara
+        out           : salida para ver el debug (FALSE)
 
     Retorna:
-        np.ndarray: Matriz (frames, n_mfcc) de coeficientes MFCC
+        np.ndarray    : Matriz (frames, n_mfcc)
     """
-    y, sr = librosa.load(file_path_wave, duration=30)  # Carga los primeros 30s
 
-    print("Forma de onda (y):", y)
-    print("Frecuencia de muestreo (sr):", sr)
+    y, sr = librosa.load(file_path_wav, duration=duracion) 
+    if out:
+        print("Forma de onda (y):", y)
+        print("Frecuencia de muestreo (sr):", sr)
 
     # hop_length y n_fft ajustados a una ventana de 0.5 segundos
-    hop = int(sr * 0.5)
+    hop = int(sr * ventana)
     mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc, hop_length=hop, n_fft=hop)
 
     return mfcc.T  # Transpuesta: filas = frames, columnas = coeficientes MFCC
 
 
 
-def extract_mfcc_from_array(array_audio, sr=22050, n_mfcc=13 ,tiempo=0.5):
-    """Extrae MFCCs desde un array de audio 1D."""
-    
-    # hop_length y n_fft ajustados a una ventana de 0.5 segundos
-    hop = int(sr * tiempo)
-    mfcc = librosa.feature.mfcc(y=array_audio, sr=sr, n_mfcc=n_mfcc,
-                                hop_length=hop, n_fft=hop)
-    return mfcc.T
-
-
-
-# Unir los mfcc's de cada audio
-
-def union_descriptors(lista_rutas_audio):
-    """
-        Input: Una lista con las rutas de audio (con todo y extension)
-        Output : Conjunto de descriptores sacados del mfcc's
-    """
-
-
-    all_descriptors = []  # Lista de todos los frames MFCC de todos los audios
-
-    for path in lista_rutas_audio:
-        mfcc = extract_mfcc(path)  # (frames, n_mfcc)
-        all_descriptors.append(mfcc)
-
-    all_descriptors = np.vstack(all_descriptors)
-    return all_descriptors 
-
-
-
 # Sacar los codewords -> kmeans y el centroide es cada codeword 
-
-def construir_codebook(features, n_clusters=256):
+def construir_codebook(features, n_clusters=256,out=False):
     """
     Aplica K-Means para construir el diccionario acústico (codebook).
+
+    Parámetros:
+        features     : vector de caracteristicas del mfcc apilados.
+        n_clusters   : numero de clusteres que se usara para entrenar
+    Retorna   :
+        Kmeans       : el modelo entrenado con los features
     """
-    print(f"Entrenando K-Means con {n_clusters} clusters sobre {features[0].shape[0]} vectores...")
+    if out:
+        print(f"Entrenando K-Means con {n_clusters} clusters sobre {features[0].shape[0]} vectores...")
     kmeans = KMeans(n_clusters=n_clusters, random_state=42, verbose=1)
     kmeans.fit(features)
-    print("Entrenamiento completado.")
+    if out:
+        print("Entrenamiento completado.")
     return kmeans
 
 
 
-def histogram_audio(mfcc_features, kmeans_model):
+def histogram_audio(mfcc_features_audio, kmeans_model):
     """
     Representa solo un audio como histograma de frecuencias de palabras acústicas.
+    
+    Parámetros:
+        mfcc_features_audio: vector de caracteristicas del mfcc por audio
+        kmeans_model       : el modelo Kmeans entrenado con el mfcc
+
+    Retorna:
+        hist         : el histograma normalizado de cada audio
     """
-    labels = kmeans_model.predict(mfcc_features)  # Cluster asignado por frame
-    print("labels:",labels)
+    #cada frame es asignado a un cluster
+    labels = kmeans_model.predict(mfcc_features_audio) 
+    #Cuenta cuántas veces aparece cada número (label/cluster)
     hist, _ = np.histogram(labels, bins=np.arange(kmeans_model.n_clusters + 1))
-    print("hist_sin_nomrm",hist)
     hist = hist / np.linalg.norm(hist)  # Normalizar histograma
-    print("hist_norm",hist)
     return hist
 
 
-
-# FALTA TESTEAR (ESTA FUNCION)
-def calcular_histogramas_todos_audios(folder_wav, kmeans_model, n_mfcc=13):
-    """
-    Procesa todos los archivos .wav y crea un diccionario de histogramas acústicos.
-    
-    Retorna:
-        dict: {nombre_archivo: [valores del histograma]}
-    """
-    diccionario_histogramas = {}
-
-    for filename in os.listdir(folder_wav):
-        if filename.endswith(".wav"):
-            path = os.path.join(folder_wav, filename)
-            nombre = os.path.splitext(filename)[0]
-
-            mfcc = extract_mfcc(path, n_mfcc=n_mfcc)
-            hist = histogram_audio(mfcc, kmeans_model)
-            diccionario_histogramas[nombre] = hist.tolist()  # Convertir a lista para JSON
-
-            print(f"Procesado: {nombre}")
-
-    return diccionario_histogramas
-# FALTA TESTEAR (ESTA FUNCION)
-def calcular_histogramas_todos_audios(folder_wav, kmeans_model, n_mfcc=13):
-    """
-    Procesa todos los archivos .wav y crea un diccionario de histogramas acústicos.
-    
-    Retorna:
-        dict: {nombre_archivo: [valores del histograma]}
-    """
-    diccionario_histogramas = {}
-
-    for filename in os.listdir(folder_wav):
-        if filename.endswith(".wav"):
-            path = os.path.join(folder_wav, filename)
-            nombre = os.path.splitext(filename)[0]
-
-            mfcc = extract_mfcc(path, n_mfcc=n_mfcc)
-            hist = histogram_audio(mfcc, kmeans_model)
-            diccionario_histogramas[nombre] = hist.tolist()  # Convertir a lista para JSON
-
-            print(f"Procesado: {nombre}")
-
-    return diccionario_histogramas
 
 def guardar_json(diccionario, ruta_salida="histogramas_acusticos.json"):
     """
@@ -202,7 +123,27 @@ def guardar_json(diccionario, ruta_salida="histogramas_acusticos.json"):
         json.dump(diccionario, f, indent=4)
     print(f"Histogramas guardados en: {ruta_salida}")
 
+from joblib import dump,load
 
+def guardar_objeto(objeto, ruta):
+    """
+    Guarda cualquier objeto serializable con joblib.
+    
+    Parámetros:
+        objeto : objeto Python a guardar (modelo, scaler, vector, etc.)
+        ruta   : ruta del archivo a guardar, por ejemplo 'modelo.joblib'
+    """
+    dump(objeto, ruta)
+
+def cargar_objeto(ruta_base):
+    """
+    Carga el objeto
+
+    Parámetros:
+        ruta_base: prefijo del archivo 
+    """
+    objeto=load(ruta_base)
+    return objeto
 
 # -----------GRAFICAS ------------
 def show_mfcc(mfcc_features,title="Coeficiente MFCC 1 a lo largo del tiempo"):
@@ -229,6 +170,121 @@ if __name__ == "__main__":
 
     # Mostrar
     show_mfcc(mfcc_matrix)
+
+
+
+
+# Aplicar knn con similitud de coseno
+
+import numpy as np
+
+def distancia_euclidiana(val1, val2):
+    
+    return np.linalg.norm(np.array(val1) - np.array(val2))
+
+def knn_lineal(query, k):
+    """
+        fijo: ruta del codebook en formato json -> dict: {nombre_archivo_id: [valores del histograma]}
+        input: query-> en formato hist o mp3
+                k -> cuantos similares retorno
+        output: retorna los  k mas cercanos
+
+        PASOS: 
+            1. Cargar el codebook
+            2. Tener la distancia 
+            
+    """
+    
+    with open("histogramas_acusticos.json") as f:
+        codebook = json.load(f)
+
+     # 2. Cola de prioridad (simulamos max-heap con -distancia)
+    heap = []  # formato: (-distancia, audio_id)
+    resultados = []
+
+    for audio_id, hist in codebook.items():
+
+        hist=list(map(float,hist)) # casteo a list float
+        dist = distancia_euclidiana(query, hist)
+        print("dist:",dist)
+        heapq.heappush(heap, (dist, audio_id))
+
+    
+    for _ in range(k):
+        dist, audio_id = heapq.heappop(heap)
+        resultados.append((audio_id, dist))
+
+    return resultados
+
+# aplicar knn con tf idf
+
+def cosine_similarity(v1, v2):
+    """
+    Retorna la similitud de coseno entre dos vectores.
+    """
+    dot = sum(a * b for a, b in zip(v1, v2))
+    norm1 = math.sqrt(sum(a * a for a in v1))
+    norm2 = math.sqrt(sum(b * b for b in v2))
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    return dot / (norm1 * norm2)
+
+
+def knn_cosine(query, k):
+    """
+    Retorna los k elementos más similares al query usando similitud de coseno,
+    solo con heap (sin ordenar al final).
+    """
+    with open("histogramas_acusticos.json") as f:
+        codebook = json.load(f)
+
+    heap = []  # max-heap
+
+    for audio_id, hist in codebook.items():    #track_id :[ hist ]
+        hist=list(map(float,hist))
+        sim = cosine_similarity(query, hist)
+        heapq.heappush(heap, (-sim, audio_id))  # max-heap simulada con -sim
+
+    resultados = []
+    for _ in range(min(k, len(heap))):
+        neg_sim, audio_id = heapq.heappop(heap)
+        sim = -neg_sim  # revertimos el negativo
+        resultados.append((audio_id, sim))
+
+    return resultados
+
+# Con los resultados del knn hacemos calculo de como conectamos para obtener musica lyric, etc etc. 
+
+import heapq
+import json
+
+def distancia_manhattan(v1, v2):
+    """
+    Calcula la distancia Manhattan (L1) entre dos vectores.
+    """
+    return sum(abs(a - b) for a, b in zip(v1, v2))
+
+def knn_manhattan(query, k):
+    """
+    Retorna los k elementos más cercanos al query usando distancia Manhattan (L1).
+    """
+    with open("histogramas_acusticos.json") as f:
+        codebook = json.load(f)
+
+    heap = []  # min-heap por defecto en Python
+
+    for audio_id, hist in codebook.items():
+        hist = list(map(float, hist))  # Asegurarse de que sean floats
+        dist = distancia_manhattan(query, hist)
+        heapq.heappush(heap, (dist, audio_id))
+
+    resultados = []
+    for _ in range(min(k, len(heap))):
+        dist, audio_id = heapq.heappop(heap)
+        resultados.append((audio_id, dist))
+
+    return resultados
+
 
 
 

@@ -1,5 +1,9 @@
-.lab-8.ipynb
-.matplotlib.ipynb
 .venv/
-audio/
+audios/
+audios_wav/
+dataset/
+.audio_histograms.json
+__pycache__/
 
+*.json
+*.joblib
