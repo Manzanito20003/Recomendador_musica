@@ -41,7 +41,29 @@ def transform_mp3_to_wav(file_path_import, file_path_export,tiempo_recorte=30):
 
     print(f"Convertido: {input_path} → {output_path}")
 
+def mp3_to_wav(file_path_import,tiempo_recorte=30):
+    """
+    Convierte los primeros 30 segundos de un archivo MP3 a WAV mono 22050 Hz.
+    
+    Parámetros:
+      file_path_import: Ruta completa del archivo MP3.
+      tiempo_recorte  : Tiempo de recorte en (Segundos)
+    Return    :
+      aduio
+    """
+    
+    # Construir la ruta de salida
+    input_path = file_path_import
 
+    # Cargar archivo MP3
+    audio = AudioSegment.from_file(input_path, format="mp3")
+
+    # Cortar los primeros 30 segundos (30 * 1000 milisegundos)
+    audio = audio[:tiempo_recorte*1000]  
+
+    # Convertir a WAV (mono, 22050 Hz)
+    audio = audio.set_frame_rate(22050).set_channels(1)
+    return audio
 
 
 

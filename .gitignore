@@ -5,5 +5,5 @@ dataset/
 .audio_histograms.json
 __pycache__/
 
-*.json
-*.joblib
+json
+joblib
