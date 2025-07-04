@@ -1,8 +1,7 @@
+__pycache__/
 .venv/
 audios/
 audios_wav/
-dataset/
-.audio_histograms.json
-__pycache__/
+
 
 
