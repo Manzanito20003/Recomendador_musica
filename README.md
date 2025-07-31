@@ -147,4 +147,4 @@ join_data = pd.merge(filas, df_genre, on='id', how='left')
 
 ## Créditos
 Este proyecto fue desarrollado como parte del curso **Base de Datos 2 (BD2)**, integrando procesamiento de audio, clustering y recomendaciones musicales mediante similitud acústica.  
-Trabajo realizado de manera colaborativa por el equipo de estudiantes.
+
